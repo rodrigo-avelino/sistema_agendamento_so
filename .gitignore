@@ -1,0 +1,19 @@
+# Python VENV e Cache
+venv/
+__pycache__/
+*.pyc
+*.pyo
+
+# Dados do Sistema (O código cria isso sozinho)
+data/
+*.log
+*.json
+
+# Arquivos de IDE (VS Code, PyCharm)
+.vscode/
+.idea/
+
+# Arquivos do PyInstaller (Build final)
+build/
+dist/
+*.spec

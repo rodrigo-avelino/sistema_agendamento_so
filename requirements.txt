@@ -1,0 +1,15 @@
+# Framework Web e API
+fastapi>=0.109.0
+uvicorn[standard]>=0.27.0
+
+# Renderização de Templates (Admin)
+jinja2>=3.1.3
+
+# Processamento de Formulários (Necessário para o Form(...) do Admin)
+python-multipart>=0.0.9
+
+# Arquivos Estáticos e Assincronismo
+aiofiles>=23.2.0
+
+# Criação do Executável (Para a entrega final)
+pyinstaller>=6.3.0
