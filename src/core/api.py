@@ -1,63 +1,70 @@
 from fastapi import APIRouter, HTTPException, WebSocket, WebSocketDisconnect
 from pydantic import BaseModel
 from typing import List
-from src.storage import JsonStorage
-from src.core.socket_manager import manager # <--- Importa nosso gerenciador
 import json
+
+from src.storage import JsonStorage
+from src.core.socket_manager import manager
+from src.core.logger import log_evento # [NOVO] Import
 
 api_router = APIRouter(prefix="/api")
 
-db_medicos = JsonStorage('medicos.json')
-db_consultas = JsonStorage('consultas.json')
+# [CORREÇÃO] Caminhos corretos dentro das subpastas
+db_medicos = JsonStorage('consultas/medicos.json')
+db_consultas = JsonStorage('consultas/consultas.json')
 
 class AgendamentoRequest(BaseModel):
     paciente_nome: str
     medico_id: int
     data_hora: str 
 
-# --- 1. Endpoint do WebSocket (Conexão Real-Time) ---
-@api_router.websocket("/ws")
+class CancelamentoRequest(BaseModel):
+    medico_id: int
+    data_hora: str
+
+# --- WebSocket ---
 @api_router.websocket("/ws")
 async def websocket_endpoint(websocket: WebSocket):
     await manager.connect(websocket)
     try:
         while True:
-            # Aguarda mensagens do Frontend
             data = await websocket.receive_text()
-            message = json.loads(data)
-            
-            # Formato esperado da chave do recurso: "ID_MEDICO|DATA_HORA"
-            # Ex: "1|2025-11-20T14:00:00"
-            
-            if message['acao'] == 'selecionar':
-                # Cliente quer pegar o "semáforo"
-                recurso_id = f"{message['medico_id']}|{message['data_hora']}"
-                sucesso = await manager.request_lock(websocket, recurso_id)
+            try:
+                message = json.loads(data)
+                acao = message.get('acao')
+
+                # Força tudo para string
+                m_id = str(message.get('medico_id', ''))
+                d_hora = str(message.get('data_hora', ''))
+                recurso_id = f"{m_id}|{d_hora}"
+
+                if acao == 'selecionar':
+                    if not m_id or not d_hora: continue
+                    sucesso = await manager.request_lock(websocket, recurso_id)
+                    
+                    await websocket.send_json({
+                        "tipo": "resposta_selecao",
+                        "sucesso": sucesso,
+                        "recurso": recurso_id,
+                        "dados_originais": {
+                            "medico_id": m_id,
+                            "data_hora": d_hora
+                        }
+                    })
+
+                elif acao == 'cancelar_selecao':
+                    if m_id and d_hora:
+                        await manager.release_lock(recurso_id)
+
+            except json.JSONDecodeError:
+                print("[WS ERROR] JSON inválido")
+            except Exception as e:
+                print(f"[WS ERROR] Erro: {e}")
                 
-                # Responde apenas para quem pediu, dizendo se conseguiu ou não
-                await websocket.send_json({
-                    "tipo": "resposta_selecao",
-                    "sucesso": sucesso,
-                    "recurso": recurso_id
-                })
-
-            elif message['acao'] == 'cancelar_selecao':
-                # Cliente desistiu, libera o semáforo
-                recurso_id = f"{message['medico_id']}|{message['data_hora']}"
-                await manager.release_lock(recurso_id)
-
     except WebSocketDisconnect:
-        # [SO - TOLERÂNCIA A FALHAS]
-        # Se a conexão cair, o manager limpa os locks e avisa o resto da rede
-        liberados = manager.disconnect(websocket)
-        for recurso in liberados:
-            await manager.broadcast({
-                "tipo": "desbloqueio_temporario",
-                "recurso": recurso,
-                "status": "free"
-            })
+        await manager.disconnect(websocket)
 
-# --- 2. Endpoints HTTP (CRUD) ---
+# --- API REST ---
 @api_router.get("/medicos")
 def listar_medicos():
     return db_medicos.read()
@@ -67,13 +74,10 @@ def listar_consultas():
     return db_consultas.read()
 
 @api_router.post("/agendar")
-async def criar_agendamento(agendamento: AgendamentoRequest): # Note o 'async' aqui agora
-    """
-    Cria agendamento e avisa todo mundo em tempo real.
-    """
+async def criar_agendamento(agendamento: AgendamentoRequest):
     consultas_existentes = db_consultas.read()
     
-    # Verificação de Conflito
+    # Verifica conflito
     for consulta in consultas_existentes:
         if (consulta['medico_id'] == agendamento.medico_id and 
             consulta['data_hora'] == agendamento.data_hora):
@@ -86,14 +90,47 @@ async def criar_agendamento(agendamento: AgendamentoRequest): # Note o 'async' a
         "status": "confirmado"
     }
     
-    # 1. Persistência (Disco/Lock)
+    # 1. Persistência (Salva no Disco)
     db_consultas.add(novo_agendamento)
+    log_evento("INFO", f"Consulta agendada: Medico {agendamento.medico_id} às {agendamento.data_hora}")
     
-    # 2. Notificação Real-Time (WebSocket)
-    # Avisa todos os fronts para pintarem esse horário de vermelho IMEDIATAMENTE
+    # [CORREÇÃO DO BUG]
+    # Montamos a chave do recurso exatamente como o WebSocket usa (ID|DATA)
+    recurso_id_ws = f"{agendamento.medico_id}|{agendamento.data_hora}"
+    
+    # Removemos o lock temporário da memória, pois agora virou definitivo no disco.
+    # Isso impede que o disconnect mande um "Livre" se o usuário fechar a aba.
+    manager.consume_lock(recurso_id_ws)
+    
+    # 2. Broadcast (Avisa que ocupou definitivamente)
     await manager.broadcast({
         "tipo": "novo_agendamento",
         "dados": novo_agendamento
     })
     
     return {"msg": "Agendado com sucesso"}
+
+@api_router.post("/cancelar")
+async def cancelar_agendamento(req: CancelamentoRequest):
+    consultas = db_consultas.read()
+    
+    # Filtra removendo a consulta alvo
+    nova_lista = [c for c in consultas if not (c['medico_id'] == req.medico_id and c['data_hora'] == req.data_hora)]
+    
+    if len(nova_lista) < len(consultas):
+        # Salva lista atualizada
+        with db_consultas._lock:
+            with open(db_consultas.filepath, 'w') as f:
+                json.dump(nova_lista, f, indent=4)
+
+        # [NOVO] Log
+        log_evento("WARN", f"Consulta desocupada/cancelada: Medico {req.medico_id} às {req.data_hora}")
+
+        await manager.broadcast({
+            "tipo": "agendamento_cancelado",
+            "medico_id": req.medico_id,
+            "data_hora": req.data_hora
+        })
+        return {"msg": "Horário desocupado."}
+    
+    raise HTTPException(status_code=404, detail="Agendamento não encontrado.")

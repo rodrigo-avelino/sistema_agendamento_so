@@ -1,65 +1,81 @@
 from fastapi import WebSocket
-from typing import List, Dict, Set
+from typing import List, Dict
 
 class ConnectionManager:
     def __init__(self):
         self.active_connections: List[WebSocket] = []
-        
-        # Memória Compartilhada de Bloqueios Temporários
-        # Chave: "medico_id|data_hora" -> Valor: WebSocket do cliente que bloqueou
         self.temporary_locks: Dict[str, WebSocket] = {} 
 
     async def connect(self, websocket: WebSocket):
         await websocket.accept()
         self.active_connections.append(websocket)
 
-    def disconnect(self, websocket: WebSocket):
-        self.active_connections.remove(websocket)
-        # [SO - RESOURCE CLEANUP]
-        # Se o cliente desconectar (fechar aba), liberamos todos os bloqueios dele
-        # para evitar Deadlock (recursos presos para sempre).
-        locks_to_release = [k for k, v in self.temporary_locks.items() if v == websocket]
-        for key in locks_to_release:
-            del self.temporary_locks[key]
-        return locks_to_release # Retorna o que foi liberado para avisar os outros
+    async def disconnect(self, websocket: WebSocket):
+        if websocket in self.active_connections:
+            self.active_connections.remove(websocket)
+        
+        locks_to_release = []
+        for resource_id, owner_socket in list(self.temporary_locks.items()):
+            if owner_socket == websocket:
+                locks_to_release.append(resource_id)
+                del self.temporary_locks[resource_id]
+        
+        for resource in locks_to_release:
+            # Só avisa desbloqueio se realmente tiver algo para liberar
+            print(f"[SO - CLEANUP] Liberando lock abandonado: {resource}")
+            await self.broadcast({
+                "tipo": "desbloqueio_temporario",
+                "recurso": resource,
+                "status": "free"
+            })
 
     async def broadcast(self, message: dict):
-        for connection in self.active_connections:
+        for connection in list(self.active_connections):
             try:
                 await connection.send_json(message)
-            except:
-                pass
+            except Exception:
+                await self.disconnect(connection)
 
     async def request_lock(self, websocket: WebSocket, resource_id: str):
-        """
-        Tenta adquirir o 'Semaforo' para um recurso específico.
-        """
-        # Verifica se já está bloqueado por OUTRA pessoa
         if resource_id in self.temporary_locks:
             if self.temporary_locks[resource_id] != websocket:
-                return False # Falha: Recurso já em uso (Busy Wait simulado no front)
-        
-        # Adquire o bloqueio
+                return False 
         self.temporary_locks[resource_id] = websocket
         
-        # Avisa TODO MUNDO que esse recurso agora está "Amarelo" (Em seleção)
         await self.broadcast({
             "tipo": "bloqueio_temporario",
             "recurso": resource_id,
-            "status": "locked"
+            "dono_id": id(websocket)
         })
         return True
 
     async def release_lock(self, resource_id: str):
-        """Libera o recurso manualmente (usuário clicou em cancelar)"""
         if resource_id in self.temporary_locks:
             del self.temporary_locks[resource_id]
-            
-            # Avisa TODO MUNDO que o recurso está "Verde" (Livre) novamente
             await self.broadcast({
                 "tipo": "desbloqueio_temporario",
-                "recurso": resource_id,
-                "status": "free"
+                "recurso": resource_id
             })
+
+    # [NOVO MÉTODO - CORREÇÃO DO BUG]
+    def consume_lock(self, resource_id: str):
+        """
+        Remove o lock da memória SILENCIOSAMENTE.
+        Usado quando o agendamento é confirmado no disco.
+        Assim, o disconnect não vai disparar 'desbloqueio' depois.
+        """
+        if resource_id in self.temporary_locks:
+            del self.temporary_locks[resource_id]
+            print(f"[SO - MEMORY] Lock temporário consumido (persistido): {resource_id}")
+
+    async def force_release_resource(self, resource_prefix: str):
+        locks_to_remove = [k for k in self.temporary_locks.keys() if k.startswith(f"{resource_prefix}|")]
+        for key in locks_to_remove:
+            del self.temporary_locks[key]
+
+        await self.broadcast({
+            "tipo": "recurso_removido",
+            "id": resource_prefix
+        })
 
 manager = ConnectionManager()

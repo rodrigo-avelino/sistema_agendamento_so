@@ -3,25 +3,29 @@ import os
 import threading
 import time
 from typing import List, Dict, Any
-# Importa os caminhos que definimos no passo anterior
-from src.config.settings import CONSULTAS_DIR, DATA_DIR
+from src.config.settings import DATA_DIR
 
 class JsonStorage:
     def __init__(self, filename: str):
         """
-        Inicializa o gerenciador de arquivo com um LOCK específico para este arquivo.
-        Cada arquivo (medicos.json, consultas.json) terá seu próprio cadeado.
+        Inicializa o gerenciador de arquivo com um LOCK específico.
         """
         self.filepath = os.path.join(DATA_DIR, filename)
         # O objeto Lock é o mecanismo do SO para sincronização de threads
-        self._lock = threading.Lock() 
+        self._lock = threading.Lock()
         
-        # Garante que o arquivo existe (cria vazio se não existir)
+        # Garante que o arquivo existe
         self._ensure_file_exists()
 
     def _ensure_file_exists(self):
-        # Lock não é estritamente necessário aqui se for chamado apenas no init, 
-        # mas boas práticas de SO sugerem cautela.
+        """
+        Verifica e cria o diretório e o arquivo se não existirem.
+        """
+        # [SO - DEFESA] Garante que a pasta pai existe antes de criar o arquivo
+        directory = os.path.dirname(self.filepath)
+        if not os.path.exists(directory):
+            os.makedirs(directory, exist_ok=True)
+
         if not os.path.exists(self.filepath):
             with open(self.filepath, 'w') as f:
                 json.dump([], f)
@@ -34,11 +38,12 @@ class JsonStorage:
         # Adquire o cadeado. Se outra thread estiver escrevendo, esta linha TRAVA e espera.
         with self._lock:
             try:
+                if not os.path.exists(self.filepath):
+                    return []
                 with open(self.filepath, 'r', encoding='utf-8') as f:
-                    data = json.load(f)
-                return data
-            except json.JSONDecodeError:
-                return [] # Retorna lista vazia se arquivo estiver corrompido/vazio
+                    return json.load(f)
+            except (json.JSONDecodeError, FileNotFoundError):
+                return [] 
 
     def add(self, item: Dict[str, Any]) -> Dict[str, Any]:
         """
@@ -50,11 +55,13 @@ class JsonStorage:
             print(f"[SO - LOCK] Thread {threading.get_ident()} adquiriu o lock para {self.filepath}")
             
             # 1. Ler estado atual
-            with open(self.filepath, 'r', encoding='utf-8') as f:
-                current_data = json.load(f)
+            try:
+                with open(self.filepath, 'r', encoding='utf-8') as f:
+                    current_data = json.load(f)
+            except (FileNotFoundError, json.JSONDecodeError):
+                current_data = []
             
             # 2. Processamento (Simulando carga pesada ou I/O lento)
-            # Isso permite que você mostre na apresentação uma outra janela esperando!
             time.sleep(2) 
             
             # 3. Modificar dados
@@ -73,9 +80,11 @@ class JsonStorage:
     def update(self, item_id: int, updates: Dict[str, Any]) -> bool:
         """Atualiza um item existente de forma segura."""
         with self._lock:
-            # Ler
-            with open(self.filepath, 'r', encoding='utf-8') as f:
-                data = json.load(f)
+            try:
+                with open(self.filepath, 'r', encoding='utf-8') as f:
+                    data = json.load(f)
+            except FileNotFoundError:
+                return False
             
             # Encontrar e atualizar
             found = False
@@ -91,3 +100,27 @@ class JsonStorage:
                     json.dump(data, f, indent=4, ensure_ascii=False)
             
             return found
+    def delete(self, item_id: int) -> bool:
+        """Remove um item pelo ID de forma segura (Thread-Safe)."""
+        with self._lock: # [SO] Exclusão Mútua para escrita
+            try:
+                # Lê o arquivo
+                with open(self.filepath, 'r', encoding='utf-8') as f:
+                    data = json.load(f)
+            except (FileNotFoundError, json.JSONDecodeError):
+                return False
+
+            # Filtra a lista removendo o item com o ID especificado
+            # (Cria uma nova lista sem o item)
+            original_len = len(data)
+            data = [item for item in data if item.get("id") != item_id]
+            
+            if len(data) < original_len:
+                # Se o tamanho mudou, é porque removeu. Salva no disco.
+                # [SO] Operação de I/O protegida
+                time.sleep(0.5) # Pequeno delay para demonstrar o Lock se necessário
+                with open(self.filepath, 'w', encoding='utf-8') as f:
+                    json.dump(data, f, indent=4, ensure_ascii=False)
+                return True
+            
+            return False

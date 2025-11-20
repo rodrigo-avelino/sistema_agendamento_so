@@ -2,84 +2,154 @@
 <html lang="pt-br">
 <head>
     <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Admin - Sistema Médico (SO)</title>
     <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css" rel="stylesheet">
     <style>
         .os-badge { font-family: monospace; background: #333; color: #0f0; padding: 2px 6px; border-radius: 4px; }
         .log-window { background: #1e1e1e; color: #ccc; height: 300px; overflow-y: scroll; font-family: monospace; padding: 10px; border-radius: 5px; }
-        .log-line { border-bottom: 1px solid #333; padding: 2px 0; }
+        .action-btn { width: 35px; height: 35px; padding: 0; display: inline-flex; align-items: center; justify-content: center; }
+        .day-row:hover { background-color: #f8f9fa; }
+        .log-line { border-bottom: 1px solid #333; padding: 2px 0; font-size: 0.9em; }
     </style>
 </head>
 <body class="bg-light">
     <nav class="navbar navbar-dark bg-dark mb-4">
         <div class="container">
-            <span class="navbar-brand mb-0 h1">🏥 Admin | Infraestrutura</span>
-            <span class="text-light"><small>Rodando em: <span class="os-badge">{{ sistema_os }}</span></small></span>
+            <span class="navbar-brand mb-0 h1">🏥 Admin | Controle de Recursos</span>
+            <span class="text-light"><small>SO: <span class="os-badge">{{ sistema_os }}</span></small></span>
         </div>
     </nav>
 
     <div class="container">
         <div class="row">
-            <div class="col-md-6">
+            <div class="col-md-7">
                 <div class="card shadow-sm mb-4">
-                    <div class="card-header bg-primary text-white d-flex justify-content-between align-items-center">
-                        <h5 class="mb-0">Médicos Cadastrados</h5>
-                        <span class="badge bg-light text-dark">Recurso Compartilhado</span>
+                    <div class="card-header bg-primary text-white">
+                        <h5 class="mb-0">Médicos e Disponibilidade</h5>
                     </div>
                     <div class="card-body">
                         <div class="list-group mb-3">
                             {% for medico in medicos %}
-                            <div class="list-group-item d-flex justify-content-between align-items-center">
-                                <div>
-                                    <strong>{{ medico.nome }}</strong><br>
-                                    <small class="text-muted">{{ medico.especialidade }}</small>
+                            <div class="list-group-item">
+                                <div class="d-flex justify-content-between align-items-center">
+                                    <div>
+                                        <strong>{{ medico.nome }}</strong> <span class="badge bg-secondary">{{ medico.especialidade }}</span>
+                                        <div class="small text-muted mt-1">
+                                            {% if medico.disponibilidade %}
+                                                {% for dia, horas in medico.disponibilidade.items() %}
+                                                    {% if horas %}
+                                                    <span class="badge bg-light text-dark border">{{ dia }}: {{ horas|length }} slots</span>
+                                                    {% endif %}
+                                                {% endfor %}
+                                            {% else %}
+                                                <span class="text-danger">⚠ Sem agenda definida</span>
+                                            {% endif %}
+                                        </div>
+                                    </div>
+                                    
+                                    <div class="btn-group">
+                                        <button type="button" class="btn btn-outline-primary action-btn" 
+                                                data-bs-toggle="modal" 
+                                                data-bs-target="#modalAgenda{{ medico.id }}"
+                                                title="Configurar Horários">
+                                            ⚙
+                                        </button>
+                                        
+                                        <form action="/admin/medico/delete" method="POST" onsubmit="return confirm('Tem certeza que deseja remover este médico?');" style="display:inline;">
+                                            <input type="hidden" name="medico_id" value="{{ medico.id }}">
+                                            <button type="submit" class="btn btn-outline-danger action-btn" title="Remover Médico">🗑</button>
+                                        </form>
+                                    </div>
                                 </div>
-                                <span class="badge bg-success">ID: {{ medico.id }}</span>
+
+                                <div class="modal fade" id="modalAgenda{{ medico.id }}" tabindex="-1">
+                                    <div class="modal-dialog modal-lg">
+                                        <div class="modal-content">
+                                            <div class="modal-header">
+                                                <h5 class="modal-title">Agenda Detalhada: {{ medico.nome }}</h5>
+                                                <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+                                            </div>
+                                            <form action="/admin/medico/horarios" method="POST">
+                                                <div class="modal-body">
+                                                    <input type="hidden" name="medico_id" value="{{ medico.id }}">
+                                                    <p class="text-muted small mb-3">Marque os horários de atendimento para cada dia da semana.</p>
+                                                    
+                                                    <div class="container-fluid px-0">
+                                                        {% for dia in ['Seg', 'Ter', 'Qua', 'Qui', 'Sex', 'Sab', 'Dom'] %}
+                                                        <div class="row mb-2 border-bottom pb-2 day-row mx-0">
+                                                            <div class="col-md-2 fw-bold d-flex align-items-center bg-light rounded-start">
+                                                                {{ dia }}
+                                                            </div>
+                                                            <div class="col-md-10 py-1">
+                                                                <div class="d-flex flex-wrap gap-2">
+                                                                    {% for hora in ['08:00', '09:00', '10:00', '11:00', '13:00', '14:00', '15:00', '16:00', '17:00', '18:00'] %}
+                                                                    <div class="form-check">
+                                                                        <input class="form-check-input" type="checkbox" 
+                                                                               name="horas_{{dia}}" 
+                                                                               value="{{hora}}" 
+                                                                               id="h_{{dia}}_{{hora}}_{{medico.id}}"
+                                                                               {% if medico.disponibilidade and medico.disponibilidade[dia] and hora in medico.disponibilidade[dia] %}checked{% endif %}>
+                                                                        <label class="form-check-label small" style="font-size: 0.85rem;" for="h_{{dia}}_{{hora}}_{{medico.id}}">{{hora}}</label>
+                                                                    </div>
+                                                                    {% endfor %}
+                                                                </div>
+                                                            </div>
+                                                        </div>
+                                                        {% endfor %}
+                                                    </div>
+                                                </div>
+                                                <div class="modal-footer">
+                                                    <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cancelar</button>
+                                                    <button type="submit" class="btn btn-primary">Salvar Configuração</button>
+                                                </div>
+                                            </form>
+                                        </div>
+                                    </div>
+                                </div>
                             </div>
                             {% else %}
-                            <div class="alert alert-warning">Nenhum médico encontrado no arquivo JSON.</div>
+                            <div class="alert alert-info">Nenhum médico cadastrado.</div>
                             {% endfor %}
                         </div>
 
                         <hr>
-                        <h6>Novo Recurso (Médico)</h6>
-                        <form action="/admin/medico/novo" method="post">
-                            <div class="mb-2">
-                                <input type="text" name="nome" class="form-control" placeholder="Nome do Médico" required>
-                            </div>
-                            <div class="mb-2">
-                                <input type="text" name="especialidade" class="form-control" placeholder="Especialidade" required>
-                            </div>
-                            <button type="submit" class="btn btn-outline-primary w-100">
-                                💾 Salvar no Disco (Com Lock)
-                            </button>
-                            <small class="text-muted d-block mt-1 text-center" style="font-size: 0.8em">
-                                *Ao clicar, o sistema bloqueará o arquivo JSON por 2s.
-                            </small>
+                        <h6>Novo Médico</h6>
+                        <form action="/admin/medico/novo" method="post" class="d-flex gap-2">
+                            <input type="text" name="nome" class="form-control" placeholder="Nome" required>
+                            <input type="text" name="especialidade" class="form-control" placeholder="Especialidade" required>
+                            <button type="submit" class="btn btn-success">Adicionar</button>
                         </form>
                     </div>
                 </div>
             </div>
 
-            <div class="col-md-6">
+            <div class="col-md-5">
                 <div class="card shadow-sm">
-                    <div class="card-header bg-secondary text-white">
-                        <h5 class="mb-0">Logs do Sistema (I/O)</h5>
-                    </div>
-                    <div class="card-body">
-                        <p class="small text-muted">Leitura direta do arquivo <code>system.log</code></p>
-                        <div class="log-window" id="logContainer">
-                            <div class="log-line text-warning">[BOOT] Inicializando sistema de arquivos... OK</div>
-                            <div class="log-line text-info">[SO] Detectado ambiente: {{ sistema_os }}</div>
-                            <div class="log-line">[INFO] Serviço HTTP iniciado na porta 8000</div>
-                            <div class="log-line">[INFO] Aguardando conexões WebSocket...</div>
+                    <div class="card-header bg-dark text-white">Logs do Sistema (I/O)</div>
+                    <div class="card-body p-0">
+                        <div class="log-window rounded-0 rounded-bottom" id="logContainer">
+                            {% if logs %}
+                                {% for log in logs %}
+                                <div class="log-line">
+                                    <span class="text-muted" style="font-size:0.75em; font-family: monospace;">[{{ log.timestamp[11:19] }}]</span>
+                                    <strong class="{% if log.tipo == 'WARN' %}text-warning{% elif log.tipo == 'ERROR' %}text-danger{% elif log.tipo == 'ADMIN' %}text-info{% else %}text-success{% endif %}" style="font-size:0.85em">
+                                        {{ log.tipo }}
+                                    </strong> 
+                                    <span class="text-light">{{ log.mensagem }}</span>
+                                </div>
+                                {% endfor %}
+                            {% else %}
+                                <div class="log-line text-muted">Nenhum log registrado no disco.</div>
+                            {% endif %}
                         </div>
-                        <button class="btn btn-sm btn-outline-secondary mt-2 w-100" onclick="location.reload()">🔄 Atualizar Logs (F5)</button>
+                        <div class="p-2">
+                             <button class="btn btn-sm btn-outline-dark w-100" onclick="location.reload()">🔄 Atualizar Logs (Leitura de Arquivo)</button>
+                        </div>
                     </div>
                 </div>
             </div>
         </div>
     </div>
+    <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/js/bootstrap.bundle.min.js"></script>
 </body>
 </html>
