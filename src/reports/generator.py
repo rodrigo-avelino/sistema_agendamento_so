@@ -1,0 +1,58 @@
+import os
+from reportlab.lib.pagesizes import letter
+from reportlab.pdfgen import canvas
+from datetime import datetime
+from src.config.settings import RELATORIOS_DIR
+
+def gerar_relatorio_pdf(consultas: list, medicos: list) -> str:
+    """
+    Gera um arquivo PDF com o resumo das consultas.
+    Conceito SO: Operação de I/O (Escrita de Arquivo Binário).
+    Retorna o nome do arquivo gerado.
+    """
+    timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
+    filename = f"relatorio_consultas_{timestamp}.pdf"
+    filepath = os.path.join(RELATORIOS_DIR, filename)
+
+    # Criação do buffer de escrita (Canvas)
+    c = canvas.Canvas(filepath, pagesize=letter)
+    width, height = letter
+
+    # Cabeçalho
+    c.setFont("Helvetica-Bold", 16)
+    c.drawString(50, height - 50, f"Relatório do Sistema - {timestamp}")
+    c.setFont("Helvetica", 10)
+    c.drawString(50, height - 70, f"Total de Consultas Agendadas: {len(consultas)}")
+    
+    c.line(50, height - 80, width - 50, height - 80)
+
+    # Corpo (Lista de Consultas)
+    y = height - 100
+    c.setFont("Helvetica-Bold", 10)
+    c.drawString(50, y, "DATA/HORA")
+    c.drawString(200, y, "MÉDICO")
+    c.drawString(400, y, "PACIENTE")
+    
+    y -= 20
+    c.setFont("Helvetica", 10)
+
+    # Mapear IDs de médicos para nomes para facilitar leitura
+    mapa_medicos = {m['id']: m['nome'] for m in medicos}
+
+    for consulta in consultas:
+        if y < 50: # Nova página se acabar espaço
+            c.showPage()
+            y = height - 50
+        
+        data_fmt = consulta['data_hora'].replace("T", " ")
+        nome_medico = mapa_medicos.get(consulta['medico_id'], f"ID {consulta['medico_id']}")
+        
+        c.drawString(50, y, data_fmt)
+        c.drawString(200, y, f"Dr(a). {nome_medico}")
+        c.drawString(400, y, consulta.get('paciente', 'N/A'))
+        y -= 15
+
+    # Finaliza operação de I/O
+    c.save()
+    
+    return filename

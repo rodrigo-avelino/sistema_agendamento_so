@@ -2,47 +2,56 @@
 <html lang="pt-br">
 <head>
     <meta charset="UTF-8">
-    <title>Cliente - Agendamento (Simulação)</title>
+    <title>Cliente - Agendamento (Simulação SO)</title>
+    <link href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.11.1/font/bootstrap-icons.css" rel="stylesheet">
     <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css" rel="stylesheet">
     <style>
-        .slot-btn { width: 80px; margin: 2px; transition: all 0.2s; position: relative; }
-        /* Cores do Semáforo */
-        .slot-livre { background-color: #28a745; color: white; }
-        .slot-selecionado-mim { background-color: #0d6efd; color: white; border: 2px solid #000; box-shadow: 0 0 10px #0d6efd; z-index: 10; }
-        .slot-bloqueado-outros { background-color: #ffc107; color: black; cursor: not-allowed; opacity: 0.7; }
-        .slot-ocupado-definitivo { background-color: #dc3545; color: white; cursor: pointer; }
-        
-        .console-log { background: #000; color: #0f0; height: 200px; overflow-y: scroll; font-family: monospace; font-size: 12px; padding: 10px; }
-        
-        /* Painel de Confirmação */
-        #confirm-panel {
-            position: fixed; bottom: 20px; left: 50%; transform: translateX(-50%);
-            background: white; padding: 15px; border-radius: 10px; box-shadow: 0 5px 20px rgba(0,0,0,0.3);
-            display: none; z-index: 1000; border: 1px solid #ccc; text-align: center;
+        :root {
+            --color-primary-dark: #1e3a8a;
+            --color-success: #10b981;
+            --color-warning: #facc15;
+            --color-danger: #ef4444;
+            --color-dark: #1f2937;
         }
+        .slot-btn { width: 90px; margin: 4px; transition: all 0.2s; position: relative; border-radius: 8px; font-weight: 600; }
+        .slot-livre { background-color: var(--color-success); color: white; border: none; }
+        .slot-selecionado-mim { background-color: var(--color-primary-dark); color: white; border: 2px solid #fff; box-shadow: 0 0 12px rgba(30, 58, 138, 0.8); z-index: 10; transform: scale(1.05); }
+        .slot-bloqueado-outros { background-color: var(--color-warning); color: var(--color-dark); cursor: not-allowed; opacity: 0.9; border: 2px dashed var(--color-dark); }
+        .slot-ocupado-definitivo { background-color: var(--color-danger); color: white; cursor: pointer; opacity: 1; font-style: italic; }
+        
+        .console-log { background: var(--color-dark); color: #34d399; height: 250px; overflow-y: scroll; font-family: 'Consolas', monospace; font-size: 13px; padding: 15px; border-radius: 0 0 10px 10px; }
+        
+        /* Painel de Confirmação Expandido */
+        #confirm-panel { position: fixed; bottom: 30px; left: 50%; transform: translateX(-50%); background: white; padding: 20px 30px; border-radius: 15px; box-shadow: 0 10px 30px rgba(0,0,0,0.4); display: none; z-index: 1000; border: 1px solid #ddd; text-align: center; min-width: 350px; }
+        
+        .text-primary, .btn-primary { color: var(--color-primary-dark) !important; }
+        .bg-primary, .btn-primary { background-color: var(--color-primary-dark) !important; border-color: var(--color-primary-dark) !important; color: white !important; }
+        .navbar-dark { background-color: var(--color-dark) !important; }
     </style>
 </head>
 <body class="bg-light">
-    <div class="container mt-4">
-        
-        <div class="row mb-4">
-            <div class="col-md-8">
-                <div class="card border-primary">
-                    <div class="card-body py-3 d-flex align-items-center gap-3 bg-white rounded">
-                        <h5 class="mb-0 text-primary">📅 Data da Consulta:</h5>
-                        <input type="date" id="data-selecionada" class="form-control w-auto fw-bold shadow-sm">
-                        <span class="badge bg-secondary fs-6" id="dia-semana-display">...</span>
-                    </div>
-                </div>
+    <nav class="navbar navbar-dark mb-4">
+        <div class="container">
+            <span class="navbar-brand mb-0 h1"><i class="bi bi-calendar-check-fill me-2"></i>Sistema de Agendamento (Simulação SO)</span>
+            <a href="/admin" class="btn btn-sm btn-outline-light"><i class="bi bi-gear-fill me-1"></i> Painel Admin</a>
+        </div>
+    </nav>
+
+    <div class="container mt-5">
+        <div class="card shadow-sm border-0 mb-5">
+            <div class="card-body py-4 d-flex align-items-center gap-4 bg-white rounded" style="border-radius: 12px;">
+                <h4 class="mb-0" style="color: var(--color-primary-dark)"><i class="bi bi-calendar-date me-2"></i>Selecione a Data:</h4>
+                <input type="date" id="data-selecionada" class="form-control form-control-lg w-auto fw-bold shadow-sm">
+                <span class="badge bg-secondary fs-6 p-2" id="dia-semana-display">...</span>
             </div>
         </div>
 
-        <div class="row">
+        <div class="row g-4">
             <div class="col-md-8">
-                <div class="card shadow-sm">
+                <div class="card shadow-lg" style="border-radius: 10px;">
                     <div class="card-header bg-primary text-white d-flex justify-content-between align-items-center">
-                        <h5 class="mb-0">Médicos Disponíveis</h5>
-                        <span id="status-conn" class="badge bg-danger">Conectando...</span>
+                        <h5 class="mb-0"><i class="bi bi-people-fill me-2"></i>Médicos Disponíveis</h5>
+                        <span id="status-conn" class="badge bg-danger p-2"><i class="bi bi-wifi-off"></i> Conectando...</span>
                     </div>
                     <div class="card-body" id="medicos-container">
                         <div class="text-center p-5"><div class="spinner-border"></div><br>Carregando...</div>
@@ -51,39 +60,44 @@
             </div>
 
             <div class="col-md-4">
-                <div class="card shadow-sm">
-                    <div class="card-header bg-dark text-white">Monitor de Eventos (SO)</div>
-                    <div class="card-body p-0">
-                        <div class="console-log" id="ws-log"></div>
-                    </div>
+                <div class="card shadow-lg" style="border-radius: 10px;">
+                    <div class="card-header bg-dark text-white"><h5 class="mb-0"><i class="bi bi-cpu-fill me-2"></i>Monitor de Eventos</h5></div>
+                    <div class="card-body p-0"><div class="console-log" id="ws-log"></div></div>
                 </div>
-                <div class="mt-3 p-3 bg-white rounded shadow-sm small">
-                    <strong>Legenda de Estados:</strong><br>
-                    🟢 Livre (Disponível)<br>
-                    🔵 Azul (Seu Lock Temporário)<br>
-                    🟡 Amarelo (Lock de Outro Processo)<br>
-                    🔴 Vermelho (Persistido em Disco)
+                <div class="mt-4 p-3 bg-white rounded-lg shadow-sm small" style="border-left: 5px solid var(--color-primary-dark);">
+                    <h6 class="fw-bold mb-2">Legenda de Sincronização:</h6>
+                    <div class="d-flex flex-column gap-1">
+                        <span><span class="badge" style="background-color: var(--color-success)">🟢</span> Livre (Disponível)</span>
+                        <span><span class="badge" style="background-color: var(--color-primary-dark)">🔵</span> Azul: Seu Lock Temporário</span>
+                        <span><span class="badge" style="background-color: var(--color-warning); color: #000">🟡</span> Amarelo: Lock de Outro (Conflito)</span>
+                        <span><span class="badge" style="background-color: var(--color-danger)">🔴</span> Vermelho: Ocupado (Gravado em Disco)</span>
+                    </div>
                 </div>
             </div>
         </div>
     </div>
 
     <div id="confirm-panel">
-        <h5>Confirmar Agendamento?</h5>
-        <p class="small text-muted mb-2" id="confirm-msg">...</p>
-        <div class="d-flex gap-2 justify-content-center">
-            <button class="btn btn-secondary btn-sm" onclick="cancelarSelecaoAtual()">Cancelar</button>
-            <button class="btn btn-success btn-sm" onclick="persistirAgendamento()">💾 Confirmar (Gravar)</button>
+        <h5><i class="bi bi-check-circle-fill text-success me-1"></i> Confirmar Agendamento</h5>
+        <div class="alert alert-light border my-2 py-2" id="confirm-msg" style="font-size: 0.9rem;">...</div>
+        
+        <div class="mb-3 text-start">
+            <label for="paciente-nome" class="form-label small fw-bold text-muted">Nome do Paciente:</label>
+            <input type="text" class="form-control" id="paciente-nome" placeholder="Digite o nome do paciente " autocomplete="off">
+        </div>
+
+        <div class="d-flex gap-3 justify-content-center">
+            <button class="btn btn-outline-secondary" onclick="cancelarSelecaoAtual()"><i class="bi bi-x-lg me-1"></i> Cancelar</button>
+            <button class="btn btn-success" onclick="persistirAgendamento()"><i class="bi bi-save me-1"></i> Confirmar</button>
         </div>
     </div>
 
+    <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/js/bootstrap.bundle.min.js"></script>
     <script>
         const MEU_CLIENT_ID = "client_" + Math.floor(Math.random() * 10000);
         let socket = null;
         let meuLockAtual = null;
-        let medicosCache = []; // Cache local para evitar requisições desnecessárias ao mudar data
-        
-        // Mapeamento do getDay() do JS (0=Domingo) para as chaves do JSON
+        let medicosCache = [];
         const DIAS_SEMANA_MAP = ['Dom', 'Seg', 'Ter', 'Qua', 'Qui', 'Sex', 'Sab'];
 
         function log(msg) {
@@ -94,27 +108,21 @@
         }
 
         document.addEventListener('DOMContentLoaded', () => {
-            // Configura Data Inicial (Hoje)
             const hoje = new Date().toISOString().split('T')[0];
             const inputDate = document.getElementById('data-selecionada');
             inputDate.value = hoje;
-            inputDate.min = hoje; 
-            
+            inputDate.min = hoje;
             atualizarLabelDia(hoje);
-
-            // Evento: Mudança de Data
             inputDate.addEventListener('change', (e) => {
                 atualizarLabelDia(e.target.value);
-                limparSelecaoLocal(); // Não pode manter lock de um dia vendo outro
-                redesenharTodosMedicos(); // Filtra horários pelo novo dia da semana
-                carregarAgendamentosOcupados(); // Busca ocupados da nova data
+                limparSelecaoLocal();
+                redesenharTodosMedicos();
+                carregarAgendamentosOcupados();
             });
-
             init();
         });
 
         function atualizarLabelDia(dataStr) {
-            // Cria data ajustando fuso horário para garantir dia correto
             const dataObj = new Date(dataStr + 'T00:00:00');
             const dia = DIAS_SEMANA_MAP[dataObj.getDay()];
             document.getElementById('dia-semana-display').innerText = `${dia}-feira`;
@@ -126,7 +134,6 @@
             await carregarAgendamentosOcupados();
         }
 
-        // --- 1. RENDERIZAÇÃO ---
         async function carregarMedicos() {
             try {
                 const res = await fetch('/api/medicos');
@@ -138,9 +145,8 @@
         function redesenharTodosMedicos() {
             const container = document.getElementById('medicos-container');
             container.innerHTML = '';
-            
             if (medicosCache.length === 0) {
-                container.innerHTML = '<div class="alert alert-warning">Nenhum médico cadastrado.</div>';
+                container.innerHTML = '<div class="alert alert-warning border-0">Nenhum médico cadastrado.</div>';
                 return;
             }
             medicosCache.forEach(m => renderizarMedico(m));
@@ -149,47 +155,33 @@
         function renderizarMedico(medico) {
             const container = document.getElementById('medicos-container');
             const dataSelecionada = document.getElementById('data-selecionada').value;
-            
-            // Descobre qual dia da semana é a data selecionada
             const dataObj = new Date(dataSelecionada + 'T00:00:00');
             const diaSemana = DIAS_SEMANA_MAP[dataObj.getDay()];
 
             const card = document.createElement('div');
-            card.className = 'card mb-3';
+            card.className = 'card mb-3 shadow-sm';
             card.id = `card-medico-${medico.id}`;
 
-            // Filtra horários: Pega apenas a lista do dia da semana correspondente
-            // Ex: se diaSemana é 'Ter', pega medico.disponibilidade['Ter']
             let slotsHtml = '';
             const horasDoDia = medico.disponibilidade ? (medico.disponibilidade[diaSemana] || []) : [];
 
             if (horasDoDia.length === 0) {
-                slotsHtml = `<div class="text-muted small p-2 bg-light rounded border">
-                                <i>Sem atendimento nesta ${diaSemana}-feira.</i>
-                             </div>`;
+                slotsHtml = `<div class="text-muted small p-3 bg-light rounded border"><i><i class="bi bi-info-circle me-1"></i> Sem atendimento nesta ${diaSemana}-feira.</i></div>`;
             } else {
                 horasDoDia.forEach(hora => {
-                    // ID ÚNICO DO RECURSO: ID_MEDICO | DATA_COMPLETA | HORA
                     const recursoId = `${medico.id}|${dataSelecionada}T${hora}`;
-                    
-                    slotsHtml += `
-                        <button id="btn-${recursoId}" 
-                                class="btn slot-btn slot-livre" 
-                                onclick="interagirSlot('${medico.id}', '${dataSelecionada}T${hora}', '${recursoId}')">
-                            ${hora}
-                        </button>`;
+                    slotsHtml += `<button id="btn-${recursoId}" class="btn slot-btn slot-livre" onclick="interagirSlot('${medico.id}', '${dataSelecionada}T${hora}', '${recursoId}')">${hora}</button>`;
                 });
             }
 
             card.innerHTML = `
                 <div class="card-body">
-                    <div class="d-flex justify-content-between">
-                        <h5 class="card-title">${medico.nome}</h5>
-                        <span class="badge bg-info text-dark">${medico.especialidade}</span>
+                    <div class="d-flex justify-content-between mb-2">
+                        <h5 class="card-title fw-bold" style="color: var(--color-primary-dark)"><i class="bi bi-person-circle me-2"></i>${medico.nome}</h5>
+                        <span class="badge bg-info text-dark p-2">${medico.especialidade}</span>
                     </div>
                     <div class="mt-2 d-flex flex-wrap gap-1">${slotsHtml}</div>
-                </div>
-            `;
+                </div>`;
             container.append(card);
         }
 
@@ -198,13 +190,8 @@
                 const res = await fetch('/api/consultas');
                 const consultas = await res.json();
                 const dataAtual = document.getElementById('data-selecionada').value;
-
-                // Limpa vermelhos antigos antes de aplicar novos
                 document.querySelectorAll('.slot-ocupado-definitivo').forEach(b => b.className = 'btn slot-btn slot-livre');
-
                 consultas.forEach(c => {
-                    // Verifica se a consulta é no dia que estou vendo
-                    // Formato c.data_hora: "YYYY-MM-DDTHH:MM"
                     if (c.data_hora.startsWith(dataAtual)) {
                         const recursoId = `${c.medico_id}|${c.data_hora}`;
                         atualizarVisualSlot(recursoId, 'ocupado');
@@ -213,15 +200,14 @@
             } catch(e) {}
         }
 
-        // --- 2. WEBSOCKET ---
         function conectarWS() {
             const protocol = window.location.protocol === 'https:' ? 'wss:' : 'ws:';
             socket = new WebSocket(`${protocol}//${window.location.host}/api/ws`);
 
             socket.onopen = () => {
-                document.getElementById('status-conn').className = 'badge bg-success';
-                document.getElementById('status-conn').innerText = 'Online';
-                log("WS Conectado.");
+                document.getElementById('status-conn').className = 'badge bg-success p-2';
+                document.getElementById('status-conn').innerHTML = '<i class="bi bi-wifi"></i> Online';
+                log("WS Conectado. ID: " + MEU_CLIENT_ID);
             };
 
             socket.onmessage = (event) => {
@@ -230,28 +216,16 @@
 
                 switch(msg.tipo) {
                     case 'novo_medico':
-                        medicosCache.push(msg.dados);
-                        redesenharTodosMedicos();
-                        break;
-                    
                     case 'atualizacao_medico':
-                        const idx = medicosCache.findIndex(m => m.id === msg.dados.id);
-                        if(idx !== -1) medicosCache[idx] = msg.dados;
-                        redesenharTodosMedicos();
-                        carregarAgendamentosOcupados(); // Re-aplica ocupados caso o botão tenha sido recriado
-                        break;
-                    
                     case 'recurso_removido':
-                        medicosCache = medicosCache.filter(m => String(m.id) !== String(msg.id));
-                        redesenharTodosMedicos();
+                        carregarMedicos();
+                        carregarAgendamentosOcupados();
+                        log(`<span class="text-info">${msg.tipo.toUpperCase()}</span>: Sincronizando catálogo.`);
                         break;
-
-                    // Eventos de Semáforo
                     case 'bloqueio_temporario':
                     case 'desbloqueio_temporario':
                     case 'novo_agendamento':
                     case 'agendamento_cancelado':
-                        // Filtro: Só processa visualmente se for na data que estou vendo
                         let dataEvento = "";
                         if (msg.recurso) dataEvento = msg.recurso.split('|')[1].split('T')[0];
                         else if (msg.dados) dataEvento = msg.dados.data_hora.split('T')[0];
@@ -259,55 +233,66 @@
 
                         if (dataEvento === dataAtual) {
                             processarEventoVisual(msg);
+                            log(`[${msg.tipo}] Recurso atualizado.`);
                         }
                         break;
-
                     case 'resposta_selecao':
                         if (msg.sucesso) {
-                            meuLockAtual = { 
-                                recursoId: msg.recurso, 
-                                medico_id: msg.dados_originais.medico_id, 
-                                data_hora: msg.dados_originais.data_hora 
+                            meuLockAtual = {
+                                recursoId: msg.recurso,
+                                medico_id: msg.dados_originais.medico_id,
+                                data_hora: msg.dados_originais.data_hora
                             };
                             atualizarVisualSlot(msg.recurso, 'meu_bloqueio');
-                            document.getElementById('confirm-msg').innerText = `Confirmar para ${msg.dados_originais.data_hora}?`;
+                            
+                            const medico = medicosCache.find(m => String(m.id) === String(msg.dados_originais.medico_id));
+                            const nomeMedico = medico ? medico.nome : "Médico Desconhecido";
+                            const hora = msg.dados_originais.data_hora.split('T')[1];
+                            const data = msg.dados_originais.data_hora.split('T')[0];
+                            
+                            document.getElementById('confirm-msg').innerHTML = `
+                                <strong>${nomeMedico}</strong><br>
+                                Data: ${data} às ${hora}
+                            `;
+                            
                             mostrarPainelConfirmacao(true);
+                            // Foca no input do nome assim que o modal abre
+                            setTimeout(() => document.getElementById('paciente-nome').focus(), 100);
+                            log('<span class="text-primary">LOCK OBTIDO</span>. Aguardando dados do paciente.');
                         } else {
-                            alert("Este horário acabou de ser bloqueado por outro usuário.");
+                            alert("Conflito: Horário bloqueado por outro usuário.");
+                            log('<span class="text-warning">LOCK FALHOU</span>. Recurso ocupado.');
                         }
                         break;
                 }
             };
 
             socket.onclose = () => {
-                document.getElementById('status-conn').className = 'badge bg-danger';
-                document.getElementById('status-conn').innerText = 'Offline';
+                document.getElementById('status-conn').className = 'badge bg-danger p-2';
+                document.getElementById('status-conn').innerHTML = 'Offline';
             };
         }
 
         function processarEventoVisual(msg) {
             if (msg.tipo === 'bloqueio_temporario') {
                 if (msg.dono_id !== MEU_CLIENT_ID) atualizarVisualSlot(msg.recurso, 'bloqueado');
-            }
-            else if (msg.tipo === 'desbloqueio_temporario') atualizarVisualSlot(msg.recurso, 'livre');
-            else if (msg.tipo === 'novo_agendamento') {
+            } else if (msg.tipo === 'desbloqueio_temporario') {
+                atualizarVisualSlot(msg.recurso, 'livre');
+            } else if (msg.tipo === 'novo_agendamento') {
                 const id = `${msg.dados.medico_id}|${msg.dados.data_hora}`;
                 atualizarVisualSlot(id, 'ocupado');
                 if (meuLockAtual && meuLockAtual.recursoId === id) limparSelecaoLocal();
-            }
-            else if (msg.tipo === 'agendamento_cancelado') {
+            } else if (msg.tipo === 'agendamento_cancelado') {
                 const id = `${msg.medico_id}|${msg.data_hora}`;
                 atualizarVisualSlot(id, 'livre');
             }
         }
 
-        // --- 3. INTERAÇÃO ---
         function interagirSlot(medicoId, dataHora, recursoId) {
             const btn = document.getElementById(`btn-${recursoId}`);
             if (!btn) return;
-
             if (btn.classList.contains('slot-ocupado-definitivo')) {
-                if (confirm("Horário ocupado. Liberar este horário?")) desocuparHorario(medicoId, dataHora);
+                if(confirm("Horário ocupado. Simular cancelamento?")) desocuparHorario(medicoId, dataHora);
                 return;
             }
             if (btn.classList.contains('slot-bloqueado-outros')) {
@@ -319,49 +304,55 @@
                 return;
             }
             if (meuLockAtual) {
-                alert("Você já tem uma seleção pendente. Confirme ou cancele.");
+                alert("Conclua a seleção atual primeiro.");
                 return;
             }
-            
             if (socket && socket.readyState === WebSocket.OPEN) {
-                socket.send(JSON.stringify({
-                    acao: 'selecionar',
-                    medico_id: String(medicoId),
-                    data_hora: dataHora
-                }));
+                socket.send(JSON.stringify({ acao: 'selecionar', medico_id: String(medicoId), data_hora: dataHora, client_id: MEU_CLIENT_ID }));
             }
         }
 
         function cancelarSelecaoAtual() {
             if (!meuLockAtual) return;
             if (socket && socket.readyState === WebSocket.OPEN) {
-                socket.send(JSON.stringify({
-                    acao: 'cancelar_selecao',
-                    medico_id: String(meuLockAtual.medico_id),
-                    data_hora: meuLockAtual.data_hora
-                }));
+                socket.send(JSON.stringify({ acao: 'cancelar_selecao', medico_id: String(meuLockAtual.medico_id), data_hora: meuLockAtual.data_hora, client_id: MEU_CLIENT_ID }));
             }
             atualizarVisualSlot(meuLockAtual.recursoId, 'livre');
             limparSelecaoLocal();
+            log('Seleção cancelada.');
         }
 
         async function persistirAgendamento() {
             if (!meuLockAtual) return;
+            
+            // --- PEGAR NOME DO PACIENTE ---
+            const inputNome = document.getElementById('paciente-nome');
+            const nomePaciente = inputNome.value.trim();
+            
+            if (!nomePaciente) {
+                alert("Por favor, digite o nome do paciente para confirmar.");
+                inputNome.focus();
+                return;
+            }
+            // ------------------------------
+
             try {
                 const response = await fetch('/api/agendar', {
                     method: 'POST',
                     headers: { 'Content-Type': 'application/json' },
-                    body: JSON.stringify({
-                        paciente_nome: "Cliente Teste",
-                        medico_id: parseInt(meuLockAtual.medico_id),
-                        data_hora: meuLockAtual.data_hora
+                    body: JSON.stringify({ 
+                        paciente_nome: nomePaciente, // Envia o nome real
+                        medico_id: parseInt(meuLockAtual.medico_id), 
+                        data_hora: meuLockAtual.data_hora 
                     })
                 });
-                if (!response.ok) {
+                if (response.ok) {
+                    log('<span class="text-success">GRAVAÇÃO OK</span>. Dados persistidos.');
+                } else {
                     const err = await response.json();
                     alert("Erro: " + (err.detail || "Falha ao salvar"));
                 }
-            } catch (e) { alert("Erro de conexão."); }
+            } catch (e) { log('Erro de conexão.'); } finally { limparSelecaoLocal(); }
         }
 
         async function desocuparHorario(medicoId, dataHora) {
@@ -372,14 +363,19 @@
             });
         }
 
-        // UI Helpers
-        function mostrarPainelConfirmacao(show) { document.getElementById('confirm-panel').style.display = show ? 'block' : 'none'; }
+        function mostrarPainelConfirmacao(show) { 
+            const panel = document.getElementById('confirm-panel');
+            panel.style.display = show ? 'block' : 'none';
+            if (!show) {
+                // Limpa o input ao fechar
+                document.getElementById('paciente-nome').value = '';
+            }
+        }
         function limparSelecaoLocal() { meuLockAtual = null; mostrarPainelConfirmacao(false); }
         function atualizarVisualSlot(recursoId, estado) {
             const btn = document.getElementById(`btn-${recursoId}`);
-            if (!btn) return; // Botão pode não existir se data mudou
-            
-            btn.className = 'btn slot-btn'; 
+            if (!btn) return;
+            btn.className = 'btn slot-btn';
             if (estado === 'livre') btn.classList.add('slot-livre');
             if (estado === 'meu_bloqueio') btn.classList.add('slot-selecionado-mim');
             if (estado === 'bloqueado') btn.classList.add('slot-bloqueado-outros');

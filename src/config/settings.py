@@ -4,26 +4,38 @@ import platform
 
 # --- 1. Detecção e Correção do Caminho Base ---
 if getattr(sys, 'frozen', False):
-    BASE_DIR = os.path.dirname(sys.executable)
+    # [CORREÇÃO CRÍTICA]
+    # Se for executável (PyInstaller), os recursos (templates) estão
+    # descompactados na pasta temporária sys._MEIPASS, e não ao lado do executável.
+    BASE_DIR = sys._MEIPASS
 else:
-    # CORREÇÃO: Estávamos subindo um nível a mais. Agora está exato.
-    # __file__ = .../src/config/settings.py
-    # dirname  = .../src/config
-    # dirname  = .../src
-    # dirname  = .../sistema_agendamento (RAIZ CORRETA)
+    # Se estiver rodando como script normal
+    # __file__ = .../src/config/settings.py -> sobe 3 níveis para chegar na raiz
     current_dir = os.path.dirname(os.path.abspath(__file__))
     BASE_DIR = os.path.dirname(os.path.dirname(current_dir))
 
-# --- 2. Definição de Paths ---
+# --- 2. Definição de Paths (Caminhos) ---
 SYSTEM_OS = platform.system()
-DATA_DIR = os.path.join(BASE_DIR, 'data')
+
+# A pasta 'data' deve ser criada AO LADO do executável (Externo), para persistir
+# Se for frozen, usamos sys.executable para pegar a pasta onde o usuário clicou
+if getattr(sys, 'frozen', False):
+    EXEC_DIR = os.path.dirname(sys.executable)
+else:
+    EXEC_DIR = BASE_DIR
+
+# Pastas de DADOS (Ficam fora para não sumir quando fecha o exe)
+DATA_DIR = os.path.join(EXEC_DIR, 'data')
 LOGS_DIR = os.path.join(DATA_DIR, 'logs')
 CONSULTAS_DIR = os.path.join(DATA_DIR, 'consultas')
 RELATORIOS_DIR = os.path.join(DATA_DIR, 'relatorios')
 
+# Pasta de RECURSOS (Fica dentro do executável/MEIPASS)
+TEMPLATES_DIR = os.path.join(BASE_DIR, 'templates')
+
 # --- 3. Bootstrapper Automático (Auto-Execução) ---
-# Isso garante que as pastas sejam criadas ANTES de qualquer import de banco de dados
 def init_filesystem():
+    """Cria a estrutura de pastas necessária ao iniciar o sistema"""
     dirs_to_create = [DATA_DIR, LOGS_DIR, CONSULTAS_DIR, RELATORIOS_DIR]
     for directory in dirs_to_create:
         if not os.path.exists(directory):
