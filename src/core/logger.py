@@ -1,26 +1,45 @@
 import datetime
 from src.storage import JsonStorage
 
-# [SO] Sistema de Arquivos: Define o caminho hierárquico correto
-# Isso salvará em data/logs/system_logs.json
-db_logs = JsonStorage('logs/system_logs.json')
+# Variável global inicializada como None (Lazy Loading)
+_db_logs_instance = None
+
+def get_db_logs():
+    """
+    [PADRÃO SINGLETON/LAZY]
+    Só inicializa o acesso ao arquivo quando for realmente necessário.
+    Isso evita o erro de tentar criar arquivo antes das pastas existirem no boot.
+    """
+    global _db_logs_instance
+    if _db_logs_instance is None:
+        # Só agora tenta acessar o disco
+        try:
+            _db_logs_instance = JsonStorage('logs/system_logs.json')
+        except Exception as e:
+            print(f"[LOG CRITICAL] Falha ao iniciar sistema de logs: {e}")
+            return None
+    return _db_logs_instance
 
 def log_evento(tipo: str, mensagem: str, usuario: str = "SYSTEM"):
     """
-    Registra um evento no arquivo de log estruturado (JSON).
-    Demonstra operação de Append-Only em arquivo de log.
+    Registra um evento no arquivo de log estruturado.
     """
-    evento = {
-        "timestamp": datetime.datetime.now().isoformat(),
-        "tipo": tipo,      # INFO, ERROR, WARN, ADMIN
-        "usuario": usuario,
-        "mensagem": mensagem
-    }
-    
-    # Usa o Lock do storage para garantir escrita segura (Thread-Safe)
     try:
-        db_logs.add(evento)
-        # Imprime no terminal para debug imediato também
+        evento = {
+            "timestamp": datetime.datetime.now().isoformat(),
+            "tipo": tipo,
+            "usuario": usuario,
+            "mensagem": mensagem
+        }
+        
+        # Imprime no terminal sempre (para debug visual)
         print(f"[{tipo}] {mensagem}")
+        
+        # Tenta gravar no disco
+        storage = get_db_logs()
+        if storage:
+            storage.add(evento)
+            
     except Exception as e:
-        print(f"[LOG ERROR] Falha ao gravar log em disco: {e}")
+        # Se o log falhar, não queremos derrubar o sistema inteiro
+        print(f"!! ERRO AO GRAVAR LOG !!: {e}")
