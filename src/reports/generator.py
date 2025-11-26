@@ -6,27 +6,25 @@ from src.config.settings import RELATORIOS_DIR
 
 def gerar_relatorio_pdf(consultas: list, medicos: list) -> str:
     """
-    Gera um arquivo PDF com o resumo das consultas.
-    Conceito SO: Operação de I/O (Escrita de Arquivo Binário).
-    Retorna o nome do arquivo gerado.
+    [SO - OPERAÇÃO DE I/O BINÁRIA]
+    Gera um arquivo PDF escrevendo bytes diretamente em um stream.
     """
     timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
     filename = f"relatorio_consultas_{timestamp}.pdf"
     filepath = os.path.join(RELATORIOS_DIR, filename)
 
-    # Criação do buffer de escrita (Canvas)
+    # [SO - BUFFER DE MEMÓRIA]
+    # O canvas funciona como um buffer em memória RAM onde desenhamos o documento.
     c = canvas.Canvas(filepath, pagesize=letter)
     width, height = letter
 
-    # Cabeçalho
+    # ... (Lógica de desenho do PDF) ...
     c.setFont("Helvetica-Bold", 16)
     c.drawString(50, height - 50, f"Relatório do Sistema - {timestamp}")
     c.setFont("Helvetica", 10)
     c.drawString(50, height - 70, f"Total de Consultas Agendadas: {len(consultas)}")
-    
     c.line(50, height - 80, width - 50, height - 80)
 
-    # Corpo (Lista de Consultas)
     y = height - 100
     c.setFont("Helvetica-Bold", 10)
     c.drawString(50, y, "DATA/HORA")
@@ -36,12 +34,11 @@ def gerar_relatorio_pdf(consultas: list, medicos: list) -> str:
     y -= 20
     c.setFont("Helvetica", 10)
 
-    # Mapear IDs de médicos para nomes para facilitar leitura
     mapa_medicos = {m['id']: m['nome'] for m in medicos}
 
     for consulta in consultas:
-        if y < 50: # Nova página se acabar espaço
-            c.showPage()
+        if y < 50:
+            c.showPage() # Paginação (Gerenciamento de Buffer)
             y = height - 50
         
         data_fmt = consulta['data_hora'].replace("T", " ")
@@ -52,7 +49,8 @@ def gerar_relatorio_pdf(consultas: list, medicos: list) -> str:
         c.drawString(400, y, consulta.get('paciente', 'N/A'))
         y -= 15
 
-    # Finaliza operação de I/O
+    # [SO - FLUSH TO DISK]
+    # O método save() realiza a descarga (flush) do buffer da memória para o disco físico.
     c.save()
     
     return filename

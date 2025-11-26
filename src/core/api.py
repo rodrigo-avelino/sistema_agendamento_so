@@ -5,11 +5,10 @@ import json
 
 from src.storage import JsonStorage
 from src.core.socket_manager import manager
-from src.core.logger import log_evento # [NOVO] Import
+from src.core.logger import log_evento 
 
 api_router = APIRouter(prefix="/api")
 
-# [CORREÇÃO] Caminhos corretos dentro das subpastas
 db_medicos = JsonStorage('consultas/medicos.json')
 db_consultas = JsonStorage('consultas/consultas.json')
 
@@ -75,6 +74,8 @@ def listar_consultas():
 
 @api_router.post("/agendar")
 async def criar_agendamento(agendamento: AgendamentoRequest):
+    # [SO - LEITURA NÃO BLOQUEANTE]
+    # O servidor lê o estado atual para verificar regras de negócio
     consultas_existentes = db_consultas.read()
     
     # Verifica conflito
@@ -90,19 +91,18 @@ async def criar_agendamento(agendamento: AgendamentoRequest):
         "status": "confirmado"
     }
     
-    # 1. Persistência (Salva no Disco)
+    # [SO - PERSISTÊNCIA ATÔMICA]
+    # Chama o método add() que contem o Mutex (Lock).
+    # Aqui ocorre o bloqueio físico da thread de escrita.
     db_consultas.add(novo_agendamento)
     log_evento("INFO", f"Consulta agendada: Medico {agendamento.medico_id} às {agendamento.data_hora}")
     
-    # [CORREÇÃO DO BUG]
-    # Montamos a chave do recurso exatamente como o WebSocket usa (ID|DATA)
+    # [SO - CONSISTÊNCIA DE ESTADO]
+    # Remove o lock da memória (Soft Lock) pois agora o dado está seguro no disco (Hard Lock).
     recurso_id_ws = f"{agendamento.medico_id}|{agendamento.data_hora}"
-    
-    # Removemos o lock temporário da memória, pois agora virou definitivo no disco.
-    # Isso impede que o disconnect mande um "Livre" se o usuário fechar a aba.
     manager.consume_lock(recurso_id_ws)
     
-    # 2. Broadcast (Avisa que ocupou definitivamente)
+    # Broadcast
     await manager.broadcast({
         "tipo": "novo_agendamento",
         "dados": novo_agendamento

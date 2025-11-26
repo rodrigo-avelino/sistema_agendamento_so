@@ -3,10 +3,13 @@ import sys
 import platform
 
 # --- 1. Detecção e Correção do Caminho Base ---
+# [SO - GERÊNCIA DE PROCESSOS] 
+# O sistema precisa saber se está rodando como um script interpretado (.py)
+# ou como um processo binário compilado (Frozen/PyInstaller).
 if getattr(sys, 'frozen', False):
-    # [CORREÇÃO] MEIPASS para arquivos internos (templates)
+    # [SO - FILE SYSTEM VIRTUAL] sys._MEIPASS é onde o PyInstaller descompacta os arquivos temporários
     BASE_DIR = sys._MEIPASS
-    # [CORREÇÃO] Caminho absoluto do executável para criar dados ao lado dele
+    # Caminho físico onde o executável reside
     EXEC_DIR = os.path.dirname(os.path.abspath(sys.executable))
 else:
     # Modo Script
@@ -15,9 +18,13 @@ else:
     EXEC_DIR = BASE_DIR
 
 # --- 2. Definição de Paths (Normalizados para o SO) ---
+# [SO - ABSTRAÇÃO DE HARDWARE]
+# platform.system() identifica o Kernel subjacente.
 SYSTEM_OS = platform.system()
 
-# Usa os.path.join e os.path.normpath para evitar barras misturadas (\ e /)
+# [SO - PATH RESOLUTION]
+# os.path.join usa o separador correto (\ para Windows, / para Linux)
+# os.path.normpath resolve redundâncias no caminho
 DATA_DIR = os.path.normpath(os.path.join(EXEC_DIR, 'data'))
 LOGS_DIR = os.path.normpath(os.path.join(DATA_DIR, 'logs'))
 CONSULTAS_DIR = os.path.normpath(os.path.join(DATA_DIR, 'consultas'))
@@ -27,13 +34,17 @@ TEMPLATES_DIR = os.path.normpath(os.path.join(BASE_DIR, 'templates'))
 
 # --- 3. Bootstrapper Automático ---
 def init_filesystem():
-    """Cria a estrutura de pastas necessária ao iniciar o sistema"""
-    # Cria a pasta pai primeiro
+    """
+    [SO - BOOTSTRAPPING]
+    Executa chamadas de sistema (syscalls) para preparar o ambiente.
+    Equivalente a comandos 'mkdir' no shell.
+    """
     if not os.path.exists(DATA_DIR):
         try:
+            # Syscall: mkdir
             os.makedirs(DATA_DIR, exist_ok=True)
         except OSError:
-            pass # Ignora erro se já existir/concorrência
+            pass 
 
     dirs_to_create = [LOGS_DIR, CONSULTAS_DIR, RELATORIOS_DIR]
     for directory in dirs_to_create:
@@ -42,10 +53,8 @@ def init_filesystem():
                 os.makedirs(directory, exist_ok=True)
                 print(f"[BOOT] Diretório criado: {directory}")
             except OSError as e:
-                # Apenas printa, não mata o programa aqui
                 print(f"[WARNING] Erro ao criar {directory}: {e}")
 
-# Tenta iniciar imediatamente, mas se falhar, o main.py tentará de novo
 try:
     init_filesystem()
 except Exception:
